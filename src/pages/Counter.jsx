@@ -113,8 +113,9 @@ export default function Counter() {
     setIsProcessing(true);
     setCurrentResult(null);
 
+    const filesSnapshot = files;
     try {
-      const images = files.map((f) => ({
+      const images = filesSnapshot.map((f) => ({
         base64: f.base64,
         mediaType: f.mediaType,
       }));
@@ -134,33 +135,33 @@ export default function Counter() {
         serviceType,
         serviceDate,
         multiAngle,
-        photoCount: files.length,
+        photoCount: filesSnapshot.length,
         ...parsed,
       };
 
       setCurrentResult(enriched);
-
-      try {
-        const row = await saveCount({
-          result: enriched,
-          files,
-          user: session.user,
-        });
-        setSessionLog((prev) => [row, ...prev]);
-        setToast({ type: "success", message: "Count saved." });
-      } catch (saveErr) {
-        setToast({
-          type: "error",
-          message: `Count succeeded but save failed: ${saveErr.message}`,
-        });
-      }
-
       setFiles([]);
+      setIsProcessing(false);
+
+      saveCount({
+        result: enriched,
+        files: filesSnapshot,
+        user: session.user,
+      })
+        .then((row) => {
+          setSessionLog((prev) => [row, ...prev]);
+          setToast({ type: "success", message: "Count saved." });
+        })
+        .catch((saveErr) => {
+          setToast({
+            type: "error",
+            message: `Count succeeded but save failed: ${saveErr.message}`,
+          });
+        });
     } catch (e) {
       setError(
         `Counting failed: ${e.message}. Try fewer photos or smaller images.`
       );
-    } finally {
       setIsProcessing(false);
     }
   };
