@@ -8,6 +8,8 @@ import {
   ImagePlus,
   Trash2,
   Sparkles,
+  Check,
+  RotateCcw,
 } from "lucide-react";
 
 import FormField from "../components/FormField.jsx";
@@ -37,6 +39,9 @@ export default function Counter() {
   );
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentResult, setCurrentResult] = useState(null);
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [savedId, setSavedId] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [sessionLog, setSessionLog] = useState([]);
   const [historyCampus, setHistoryCampus] = useState(defaultCampus);
   const [error, setError] = useState(null);
@@ -112,6 +117,7 @@ export default function Counter() {
     setError(null);
     setIsProcessing(true);
     setCurrentResult(null);
+    setSavedId(null);
 
     const filesSnapshot = files;
     try {
@@ -140,30 +146,42 @@ export default function Counter() {
       };
 
       setCurrentResult(enriched);
+      setPendingFiles(filesSnapshot);
       setFiles([]);
-      setIsProcessing(false);
-
-      saveCount({
-        result: enriched,
-        files: filesSnapshot,
-        user: session.user,
-      })
-        .then((row) => {
-          setSessionLog((prev) => [row, ...prev]);
-          setToast({ type: "success", message: "Count saved." });
-        })
-        .catch((saveErr) => {
-          setToast({
-            type: "error",
-            message: `Count succeeded but save failed: ${saveErr.message}`,
-          });
-        });
     } catch (e) {
       setError(
         `Counting failed: ${e.message}. Try fewer photos or smaller images.`
       );
+    } finally {
       setIsProcessing(false);
     }
+  };
+
+  const saveCurrent = async () => {
+    if (!currentResult || savedId || isSaving) return;
+    setIsSaving(true);
+    try {
+      const row = await saveCount({
+        result: currentResult,
+        files: pendingFiles,
+        user: session.user,
+      });
+      setSessionLog((prev) => [row, ...prev]);
+      setSavedId(row.id);
+      setToast({ type: "success", message: "Count saved to history." });
+    } catch (e) {
+      setToast({ type: "error", message: `Save failed: ${e.message}` });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const startNewCount = () => {
+    setCurrentResult(null);
+    setPendingFiles([]);
+    setSavedId(null);
+    setError(null);
+    setFiles([]);
   };
 
   const formatTimestamp = (iso) => {
@@ -481,6 +499,68 @@ export default function Counter() {
         {currentResult && (
           <section ref={resultRef} className="mb-10 fade-up">
             <ResultCard result={currentResult} prominent />
+            <div className="mt-4 flex flex-col sm:flex-row gap-3">
+              {savedId ? (
+                <div
+                  className="flex-1 rounded-xl px-5 py-3.5 text-sm font-semibold flex items-center justify-center gap-2"
+                  style={{
+                    backgroundColor: "#DDE9F5",
+                    color: "#1F568C",
+                    border: "1px solid #A7CEF2",
+                  }}
+                >
+                  <Check size={16} strokeWidth={2.5} />
+                  Saved to history
+                </div>
+              ) : (
+                <button
+                  onClick={saveCurrent}
+                  disabled={isSaving}
+                  className="flex-1 rounded-xl px-5 py-3.5 text-sm font-semibold transition-all flex items-center justify-center gap-2"
+                  style={{
+                    backgroundColor: isSaving ? "#C5D5E5" : "#1F568C",
+                    color: "white",
+                    cursor: isSaving ? "not-allowed" : "pointer",
+                    boxShadow: isSaving
+                      ? "none"
+                      : "0 4px 16px -4px rgba(31,86,140,0.4)",
+                  }}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} strokeWidth={2.5} />
+                      Save count
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={startNewCount}
+                className="rounded-xl px-5 py-3.5 text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                style={{
+                  backgroundColor: "white",
+                  color: "#1F568C",
+                  border: "1px solid #A7CEF2",
+                }}
+              >
+                <RotateCcw size={16} />
+                Start new count
+              </button>
+            </div>
+            {!savedId && (
+              <p
+                className="text-xs mt-3 text-center"
+                style={{ color: "#6B7A92" }}
+              >
+                Review the count above. Save it to add to history (admins see
+                this), or start over to recount.
+              </p>
+            )}
           </section>
         )}
 
