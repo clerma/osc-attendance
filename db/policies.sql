@@ -49,6 +49,9 @@ create policy profiles_update_admin on profiles
   for update using (is_admin(auth.uid()));
 
 -- Prevent non-admins from elevating their own role.
+-- auth.uid() is null when the update comes from the SQL editor / service
+-- role / postgres role; in those cases we allow the change (server-side
+-- admin work). Only volunteer-level callers are blocked.
 create or replace function prevent_self_role_escalation()
 returns trigger
 language plpgsql
@@ -56,7 +59,9 @@ security definer
 set search_path = public
 as $$
 begin
-  if new.role is distinct from old.role and not is_admin(auth.uid()) then
+  if new.role is distinct from old.role
+    and auth.uid() is not null
+    and not is_admin(auth.uid()) then
     new.role := old.role;
   end if;
   return new;
