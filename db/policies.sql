@@ -1,5 +1,28 @@
 -- Row Level Security policies for OSC Attendance.
--- Apply after schema.sql.
+-- Apply after schema.sql. Safe to re-run.
+
+-- ---------- helpers ----------
+-- SECURITY DEFINER lookups so policies on `profiles` don't reference
+-- `profiles` and recurse.
+create or replace function is_admin(uid uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce((select role = 'admin' from profiles where id = uid), false);
+$$;
+
+create or replace function user_default_campus(uid uuid)
+returns text
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select default_campus from profiles where id = uid;
+$$;
 
 -- ---------- profiles ----------
 alter table profiles enable row level security;
@@ -10,12 +33,7 @@ create policy profiles_select_own on profiles
 
 drop policy if exists profiles_select_admin on profiles;
 create policy profiles_select_admin on profiles
-  for select using (
-    exists (
-      select 1 from profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
-  );
+  for select using (is_admin(auth.uid()));
 
 drop policy if exists profiles_insert_self on profiles;
 create policy profiles_insert_self on profiles
@@ -28,12 +46,7 @@ create policy profiles_update_self on profiles
 
 drop policy if exists profiles_update_admin on profiles;
 create policy profiles_update_admin on profiles
-  for update using (
-    exists (
-      select 1 from profiles p
-      where p.id = auth.uid() and p.role = 'admin'
-    )
-  );
+  for update using (is_admin(auth.uid()));
 
 -- Prevent non-admins from elevating their own role.
 create or replace function prevent_self_role_escalation()
@@ -42,14 +55,9 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  caller_role text;
 begin
-  if new.role is distinct from old.role then
-    select role into caller_role from profiles where id = auth.uid();
-    if caller_role is distinct from 'admin' then
-      new.role := old.role;
-    end if;
+  if new.role is distinct from old.role and not is_admin(auth.uid()) then
+    new.role := old.role;
   end if;
   return new;
 end;
@@ -70,11 +78,8 @@ create policy counts_insert_own on counts
 drop policy if exists counts_select_same_campus on counts;
 create policy counts_select_same_campus on counts
   for select using (
-    exists (
-      select 1 from profiles p
-      where p.id = auth.uid()
-        and (p.role = 'admin' or p.default_campus = counts.campus)
-    )
+    is_admin(auth.uid())
+    or user_default_campus(auth.uid()) = counts.campus
   );
 
 -- No update / delete policies: counts are an immutable audit trail.
@@ -96,9 +101,11 @@ create policy count_photos_select_via_count on count_photos
   for select using (
     exists (
       select 1 from counts c
-      join profiles p on p.id = auth.uid()
       where c.id = count_photos.count_id
-        and (p.role = 'admin' or p.default_campus = c.campus)
+        and (
+          is_admin(auth.uid())
+          or user_default_campus(auth.uid()) = c.campus
+        )
     )
   );
 
@@ -122,9 +129,6 @@ create policy storage_attendance_select on storage.objects
     bucket_id = 'attendance-photos'
     and (
       (storage.foldername(name))[1] = auth.uid()::text
-      or exists (
-        select 1 from profiles p
-        where p.id = auth.uid() and p.role = 'admin'
-      )
+      or is_admin(auth.uid())
     )
   );
