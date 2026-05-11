@@ -8,7 +8,7 @@ export interface Env {
 
 const AREA_GUIDANCE: Record<string, string> = {
   Sanctuary:
-    "This is the main worship sanctuary. Count adults and older children/teens seated or standing in the audience. Count people on stage (worship team, speakers, musicians) separately.",
+    "This is the main worship sanctuary. Count adults and older children/teens seated or standing in the audience. Count people on stage (worship team, speakers, musicians) separately. For stage_count, only count clearly visible humans physically present on the stage platform — do NOT count musical instruments (drum kits, keyboards, guitars on stands), microphone stands, lighting rigs, video screens, projected imagery, mannequins, or other equipment. Sound booths and drum enclosures may contain a person; only count them if you can actually see a person inside. When uncertain whether something is a human, exclude it.",
   "Kids Church":
     "This is a kids ministry environment. Most people in the audience will be children. Count children in the audience separately from adult leaders/volunteers — return the child count as total_count and the leader count as stage_count. Note in your reasoning if the leader/child split is unclear.",
   Students:
@@ -115,9 +115,11 @@ Return ONLY a JSON object with no surrounding text or markdown:
 }
 
 Confidence calibration:
-- high = elevated vantage, clear separation, lit audience, ~5-8% margin
+- high = single photo with elevated vantage, clear separation, lit audience, ~5-8% margin
 - medium = some occlusion, mixed lighting, but most people resolvable, ~10-15% margin
-- low = heavy occlusion, mid-crowd angle, very dim, or candlelight (rough estimate)`;
+- low = heavy occlusion, mid-crowd angle, very dim, or candlelight (rough estimate)
+
+Multi-angle stitch confidence ceiling: when multiAngle is true, confidence cannot exceed "medium" regardless of vantage quality — overlap detection introduces inherent uncertainty.`;
 }
 
 function validateRequest(body: unknown): CountRequest | string {
