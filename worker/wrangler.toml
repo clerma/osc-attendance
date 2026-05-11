@@ -1,0 +1,13 @@
+name = "osc-attendance-api"
+main = "src/index.ts"
+compatibility_date = "2024-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Public, non-secret config. Set the actual values per-environment.
+# Secrets (ANTHROPIC_API_KEY, SUPABASE_*) go in via:
+#   wrangler secret put ANTHROPIC_API_KEY
+#   wrangler secret put SUPABASE_URL
+#   wrangler secret put SUPABASE_ANON_KEY
+[vars]
+ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+CORS_ORIGIN = "*"
